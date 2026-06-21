@@ -1,0 +1,6 @@
+{
+  "name": "Prescription Intelligence Network",
+  "description": "A patient-primacy medical locker where patients own their data via asymmetric digital keys, approving doctor access requests securely with AI drug conflict and fraud detection.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
