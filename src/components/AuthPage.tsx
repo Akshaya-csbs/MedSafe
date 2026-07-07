@@ -63,6 +63,12 @@ export default function AuthPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email }),
       });
+      
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("The backend API could not be reached. If you are on a static deployment, the Express backend is not running.");
+      }
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Failed to send OTP code.');
@@ -178,6 +184,12 @@ export default function AuthPage({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, otp }),
       });
+
+      const contentType = response.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        throw new Error("The backend API could not be reached. If you are on a static deployment, the Express backend is not running.");
+      }
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || 'Failed to verify OTP code.');
