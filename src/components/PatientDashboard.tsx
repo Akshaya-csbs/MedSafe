@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Shield, Key, FileText, Lock, Plus, Check, X, LogOut, Radio, HelpCircle, Eye, EyeOff, AlertTriangle, AlertCircle, Copy, Database, Sparkles, RefreshCcw, UploadCloud, Image, Camera, Paperclip, Search, ZoomIn } from 'lucide-react';
 import { UserProfile, MedicalRecord, AccessRequest, AuditLog } from '../types';
 import { encryptRecord, decryptRecord, generateHash, signRequest, checkDrugInteractions } from '../utils/cryptoSim';
+import { HindsightMemoryManager, PatientMemory } from '../ai';
 import EncryptionVisualizer from './EncryptionVisualizer';
 
 interface PatientDashboardProps {
@@ -27,6 +28,18 @@ export default function PatientDashboard({
 }: PatientDashboardProps) {
   // Navigation internal view
   const [activeTab, setActiveTab] = useState<'LOCKER' | 'DOCTORS' | 'LEDGER' | 'KEYCARD'>('LOCKER');
+
+  // AI Memory State
+  const [healthSummary, setHealthSummary] = useState<PatientMemory | null>(null);
+
+  React.useEffect(() => {
+    async function fetchMemory() {
+      const memoryManager = new HindsightMemoryManager();
+      const memory = await memoryManager.recall(user.id, 'FULL_VAULT_ACCESS', 'mock_consent_token', user.id);
+      setHealthSummary(memory);
+    }
+    fetchMemory();
+  }, [user.id]);
 
   // Input States for New Record Creation
   const [showAddForm, setShowAddForm] = useState(false);
@@ -356,6 +369,36 @@ export default function PatientDashboard({
         {activeTab === 'LOCKER' && (
           <div id="patient-locker-view" className="space-y-6 bg-blue-50/30 backdrop-blur-sm p-6 md:p-8 rounded-3xl border border-blue-100/50 shadow-sm">
             
+            {/* AI Health Summary */}
+            {healthSummary && (
+              <div className="bg-indigo-50/70 p-5 rounded-2xl border border-indigo-100/60 mb-6">
+                <h3 className="font-display text-lg font-bold text-indigo-950 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-indigo-600" /> AI Health Summary (Hindsight Memory)
+                </h3>
+                <p className="text-sm font-sans text-indigo-800/80 mt-2 leading-relaxed">
+                  {healthSummary.summaries}
+                </p>
+                <div className="mt-4 flex flex-col md:flex-row gap-4">
+                  <div className="text-xs bg-white/60 p-3 rounded-lg flex-1">
+                    <span className="font-bold text-indigo-900 block mb-1">Confirmed Facts:</span>
+                    <ul className="list-disc list-inside text-indigo-700 space-y-0.5">
+                      {Object.entries(healthSummary.facts).map(([key, val]) => (
+                        <li key={key} className="capitalize">{key}: {val}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="text-xs bg-white/60 p-3 rounded-lg flex-1">
+                    <span className="font-bold text-indigo-900 block mb-1">AI Inferred Beliefs:</span>
+                    <ul className="list-disc list-inside text-indigo-700 space-y-0.5">
+                      {healthSummary.beliefs.map((belief, idx) => (
+                        <li key={idx}>{belief}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Header control */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-teal-50/70 p-5 rounded-2xl border border-teal-100/60 mb-6">
               <div>

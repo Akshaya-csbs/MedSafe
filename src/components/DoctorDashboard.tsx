@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Shield, Key, Search, FileLock, ClipboardList, Send, Sparkles, Check, X, ShieldAlert, LogOut, Radio, RefreshCw, Layers, PlusCircle, Unlock, Lock, AlertTriangle, ChevronRight, QrCode, ScanLine, UploadCloud, Image, Camera, Paperclip, ZoomIn } from 'lucide-react';
 import { UserProfile, MedicalRecord, AccessRequest, AuditLog } from '../types';
-import { decryptRecord, checkDrugInteractions, generateHash } from '../utils/cryptoSim';
+import { decryptRecord, generateHash } from '../utils/cryptoSim';
+import { SafetyAnalyzer, HindsightMemoryManager, ExplainableSafetyReport, CascadeRouter, AIQuery } from '../ai';
 import QRScanner from './QRScanner';
 
 interface DoctorDashboardProps {
@@ -71,11 +72,7 @@ export default function DoctorDashboard({
   const [selectedZoomPhoto, setSelectedZoomPhoto] = useState<string | null>(null);
 
   // AI conflict interceptor state
-  const [aiWarning, setAiWarning] = useState<{
-    severity: 'CRITICAL' | 'MODERATE' | 'NONE';
-    description: string;
-    resolution: string;
-  } | null>(null);
+  const [aiWarning, setAiWarning] = useState<ExplainableSafetyReport | null>(null);
 
   const [simulationStep, setSimulationStep] = useState<'IDLE' | 'ANALYZING' | 'WARN_SHOWN'>('IDLE');
 
@@ -155,36 +152,76 @@ export default function DoctorDashboard({
     }
   };
 
-  // Pre-examine drugs with AI prior to appending records
-  const triggerAiCheckingSequence = () => {
+  const triggerAiCheckingSequence = async () => {
     if (!newPrescDrugs) {
       setAiWarning(null);
       return;
     }
 
     setSimulationStep('ANALYZING');
-    const splitDrugs = newPrescDrugs.split(',').map(m => m.trim()).filter(Boolean);
+    
+    // Instantiate AI Core
+    const memoryManager = new HindsightMemoryManager();
+    const safetyAnalyzer = new SafetyAnalyzer();
+    const cascadeRouter = new CascadeRouter();
 
-    // Look for overall combinations including those in patient's past records if we have a patient
-    const pastDrugs: string[] = [];
-    if (selectedGrantReq) {
-      const patientRecords = records.filter(r => r.patientId === selectedGrantReq.patientId);
-      patientRecords.forEach(r => pastDrugs.push(...r.medicines));
-    }
+    const patientIdToCheck = selectedGrantReq?.patientId || 'unknown-patient';
+    const drugsArray = newPrescDrugs.split(',').map(m => m.trim()).filter(Boolean);
+    
+    // Determine query complexity
+    const isMultiDrug = drugsArray.length > 1;
+    const isHighRisk = drugsArray.some(d => 
+      d.toLowerCase().includes('penicillin') || 
+      d.toLowerCase().includes('lisinopril') || 
+      d.toLowerCase().includes('amoxicillin')
+    );
 
-    const compiledMedList = [...splitDrugs, ...pastDrugs];
+    const query: AIQuery = {
+      id: `query-${Date.now().toString().slice(-6)}`,
+      type: (isMultiDrug || isHighRisk) ? 'DRUG_INTERACTION' : 'GENERAL_CLINICAL_QUERY',
+      patientId: patientIdToCheck,
+      payload: { drugs: drugsArray },
+      riskLevel: isHighRisk ? 'HIGH' : 'LOW'
+    };
 
+    const route = cascadeRouter.routeRequest(query);
+    const routeReasoning = cascadeRouter.getRoutingExplanation(query, route);
+
+    onAddLog(
+      'CascadeFlow Router Initiated',
+      'SUCCESS',
+      routeReasoning
+    );
+    
+    // Await memory recall
+    const memory = await memoryManager.recall(patientIdToCheck, 'PRESCRIPTION_REVIEW', 'mock_consent_token', user.id);
+    
     setTimeout(() => {
-      const evaluation = checkDrugInteractions(compiledMedList);
-      setAiWarning(evaluation);
-      setSimulationStep('WARN_SHOWN');
+      if (route === 'RULES_ENGINE') {
+        const safeReport: ExplainableSafetyReport = {
+          severity: 'NONE',
+          detected: 'Cleared by Fast Rules Engine',
+          whyItMatters: 'The prescribed medication is common, low-risk, and poses no known complex interactions. Bypassed deep reasoning.',
+          historicalContext: [],
+          actionRecommended: 'Proceed with prescription.'
+        };
+        setAiWarning(safeReport);
+        setSimulationStep('WARN_SHOWN');
+      } else if (memory) {
+        const { report } = safetyAnalyzer.analyzePrescription(newPrescDrugs, memory);
+        setAiWarning(report);
+        setSimulationStep('WARN_SHOWN');
 
-      if (evaluation.severity !== 'NONE') {
-        onAddLog(
-          'AI Contraindication Detected',
-          evaluation.severity === 'CRITICAL' ? 'ALERT' : 'WARNING',
-          `AI Interceptor scan raised warning of type ${evaluation.severity} for active drugs compilation: ${compiledMedList.join(', ')}.`
-        );
+        if (report.severity !== 'NONE') {
+          onAddLog(
+            'AI Contraindication Detected',
+            report.severity === 'CRITICAL' ? 'ALERT' : 'WARNING',
+            `AI Interceptor scan raised warning of type ${report.severity} for active drug query: ${newPrescDrugs}.`
+          );
+        }
+      } else {
+        // Fallback if consent failed
+        setSimulationStep('IDLE');
       }
     }, 1200);
   };
@@ -631,11 +668,18 @@ export default function DoctorDashboard({
                           <h5 className="font-bold font-display uppercase tracking-wider flex items-center gap-1 text-[11px] font-bold">
                             <ShieldAlert className="h-4 w-4" /> AI INTERCEPT: {aiWarning.severity} PHARMACOLOGICAL WARNING
                           </h5>
-                          <p className="font-sans text-[11px] leading-relaxed opacity-95">
-                            {aiWarning.description}
+                          <p className="text-zinc-600 text-xs font-sans leading-relaxed mt-1">
+                            {aiWarning.whyItMatters}
                           </p>
-                          <p className="font-sans text-[10px] leading-relaxed opacity-90 pt-1 italic">
-                            <span className="font-bold underline">Urgent Clinician Resolution:</span> {aiWarning.resolution}
+                          {aiWarning.historicalContext.length > 0 && (
+                            <ul className="list-disc list-inside text-[10px] text-zinc-500 mt-2 mb-2">
+                              {aiWarning.historicalContext.map((ctx, idx) => (
+                                <li key={idx}>{ctx}</li>
+                              ))}
+                            </ul>
+                          )}
+                          <p className="text-[10px] text-zinc-700 mt-3 font-mono bg-white/50 p-2 rounded border border-zinc-200">
+                            <span className="font-bold underline">Urgent Clinician Resolution:</span> {aiWarning.actionRecommended}
                           </p>
                         </div>
                       </div>

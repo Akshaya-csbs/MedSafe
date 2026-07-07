@@ -161,9 +161,6 @@ export default function LandingPage({ onGetStarted, onLogin }: LandingPageProps)
       {/* Core Workflow Section */}
       <section id="workflow-tracker" className="relative z-10 max-w-7xl mx-auto px-6 py-20 border-t border-zinc-200 bg-[#fbfbfb]">
         <div className="text-center mb-14">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-100 rounded-full text-zinc-600 text-xs font-mono mb-4 border border-zinc-200">
-            <Cpu className="h-3.5 w-3.5 text-zinc-900" /> SYSTEM ARCHITECTURE
-          </div>
           <h3 className="font-display text-2xl md:text-3xl font-extrabold text-teal-700 mb-4">
             The Med-Safe Workflow
           </h3>
